@@ -47,7 +47,13 @@ def main(argv=None):
         eng = Engine(mem, problems, seed=a.seed, target_seconds=a.target_seconds, repo_root=ROOT)
         n = 0
         while True:
-            out = eng.step(a.problem, a.arm)
+            try:
+                out = eng.step(a.problem, a.arm)
+            except RuntimeError as e:
+                if "MAX_N" in str(e):
+                    print("frontier cap reached; stopping cleanly")
+                    break
+                raise
             n += 1
             print(json.dumps({k: (round(v, 3) if isinstance(v, float) else v) for k, v in out.items()}))
             if not a.forever and n >= a.steps:
