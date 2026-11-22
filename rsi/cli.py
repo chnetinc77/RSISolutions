@@ -53,6 +53,9 @@ def main(argv=None):
             if not a.forever and n >= a.steps:
                 break
             if a.forever and out.get("status") == "failed":
+                if "MAX_N" in out.get("error", ""):
+                    print("frontier cap reached; stopping cleanly")
+                    break
                 time.sleep(30)
     elif a.cmd == "dashboard":
         srv = serve(a.db, problems, a.host, a.port)
