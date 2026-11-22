@@ -1,0 +1,4 @@
+{"created":1795377857.7843797,"id":1,"problem_id":"hou_zeng_ppl013","tag":"tuning","text":"bitset_residual: adopted {\"K\":34} (rate 2544294/s vs incumbent 1628539)"}
+{"created":1795377861.2763836,"id":2,"problem_id":"hou_zeng_ppl013","tag":"tuning","text":"bitset_residual: adopted {\"K\":68} (rate 6505946/s vs incumbent 2544294)"}
+{"created":1795378049.9720855,"id":3,"problem_id":"hou_zeng_ppl013","tag":"strategy","text":"preferred strategy is now 'bitset_residual' (bitset_residual: 0.84 over 7 runs, per_n_early_exit: 0.61 over 3 runs)"}
+{"created":1795378381.6042857,"id":4,"problem_id":"hou_zeng_ppl013","tag":"tuning","text":"bitset_residual: rejected {\"K\":95} (rate 377709/s <= 1.05x incumbent 4709480/s)"}

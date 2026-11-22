@@ -1,0 +1,12 @@
+{"key":"last_idx:per_n_early_exit","problem_id":"hou_zeng_ppl013","value":"14"}
+{"key":"frontier","problem_id":"hou_zeng_ppl013","value":"400000000"}
+{"key":"n_search","problem_id":"hou_zeng_ppl013","value":"12"}
+{"key":"last_search_idx:per_n_early_exit","problem_id":"hou_zeng_ppl013","value":"11"}
+{"key":"best_rate","problem_id":"hou_zeng_ppl013","value":"6505946.4411994945"}
+{"key":"scale","problem_id":"hou_zeng_ppl013","value":"53.831430041685024"}
+{"key":"last_idx:bitset_residual","problem_id":"hou_zeng_ppl013","value":"15"}
+{"key":"last_search_idx:bitset_residual","problem_id":"hou_zeng_ppl013","value":"12"}
+{"key":"incumbent_rate:bitset_residual","problem_id":"hou_zeng_ppl013","value":"4709479.791788096"}
+{"key":"tuned:bitset_residual","problem_id":"hou_zeng_ppl013","value":"{\"K\": 68}"}
+{"key":"last_idx:representation_stats","problem_id":"hou_zeng_ppl013","value":"9"}
+{"key":"preferred_arm","problem_id":"hou_zeng_ppl013","value":"\"bitset_residual\""}
