@@ -1,0 +1,12 @@
+[Unit]
+Description=RSI research agent (Hou-Zeng)
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/RSISolutions
+ExecStart=/usr/bin/python3 -m rsi run hou_zeng_ppl013 --forever --target-seconds 30 --mem-limit-mb 5000
+Restart=on-failure
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
