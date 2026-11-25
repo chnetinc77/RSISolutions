@@ -13,7 +13,7 @@ the plugin exists to exercise the machinery honestly. **Check the original prize
 ```bash
 python3 -m unittest discover -s tests -v        # 13 tests
 python3 -m rsi run hou_zeng_ppl013 --steps 10 --target-seconds 10
-python3 -m rsi dashboard --port 8787            # http://127.0.0.1:8787
+python3 -m rsi publish --push                  # update the public static dashboard (GitHub -> Vercel)
 python3 -m rsi status | claims | verify-journal | replay <exp_id> | export
 python3 -m rsi run hou_zeng_ppl013 --forever    # daemon; see deploy/*.service
 ```
@@ -27,7 +27,7 @@ python3 -m rsi run hou_zeng_ppl013 --forever    # daemon; see deploy/*.service
 | Permanent memory | `rsi/memory.py` SQLite + hash-chained journal + JSONL export |
 | Independent verification | `rsi/verify.py` policy + per-problem verifiers (`verifiers/`, separate process, separate code) |
 | Measured improvement | `rsi/perf.py`: median recent throughput per strategy, speedup vs baseline; dashboard chart |
-| Dashboard | `rsi/dashboard.py` (`/` page, `/api/state` JSON) |
+| Dashboard | static site in `web/` (FL Superintelligence Labs style) deployed on Vercel; data from `rsi publish` (`docs/DASHBOARD.md`) |
 | Reproducibility | each experiment stores params, seed, code hash, git commit, Python/platform, result digest; `rsi replay` |
 
 See `docs/` for architecture, verification policy, adding problems, and Hou-Zeng details/limits.

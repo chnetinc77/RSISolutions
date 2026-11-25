@@ -29,6 +29,8 @@ def main(argv=None):
     sub.add_parser("status"); sub.add_parser("claims"); sub.add_parser("verify-journal")
     rp = sub.add_parser("replay"); rp.add_argument("experiment", type=int)
     sub.add_parser("export")
+    pb = sub.add_parser("publish", help="write web/data/state.json for the static Vercel dashboard")
+    pb.add_argument("--out", default=os.path.join(ROOT, "web", "data")); pb.add_argument("--push", action="store_true")
     a = ap.parse_args(argv)
 
     problems = load_problems(a.problems)
@@ -80,6 +82,18 @@ def main(argv=None):
         res = mem.verify_journal(); print(res); sys.exit(0 if res["ok"] else 1)
     elif a.cmd == "replay":
         res = Engine(mem, problems).replay(a.experiment); print(json.dumps(res, indent=2)); sys.exit(0 if res["reproduced"] else 1)
+    elif a.cmd == "publish":
+        from .dashboard import publish
+        path = publish(mem, problems, a.out)
+        print("wrote", path)
+        if a.push:
+            import subprocess
+            subprocess.run(["git", "add", "web/data/state.json"], cwd=ROOT, check=True)
+            if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=ROOT).returncode != 0:
+                subprocess.run(["git", "commit", "-m", "Dashboard data update"], cwd=ROOT, check=True)
+                subprocess.run(["git", "push"], cwd=ROOT, check=True)
+            else:
+                print("no changes to push")
     elif a.cmd == "export":
         print("\n".join(mem.export_jsonl(os.path.join(ROOT, "memory", "export"))))
 

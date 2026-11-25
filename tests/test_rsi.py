@@ -122,5 +122,19 @@ class DashboardTests(unittest.TestCase):
         srv.shutdown()
 
 
+class PublishTests(unittest.TestCase):
+    def test_publish_writes_static_state_and_site_files_exist(self):
+        from rsi.dashboard import publish
+        d = tempfile.mkdtemp(); mem = Memory(os.path.join(d, "m.sqlite"))
+        probs = {p.id: p for p in toy.get_problems()}
+        Engine(mem, probs, target_seconds=1).run("toy_goldbach", 2)
+        path = publish(mem, probs, os.path.join(d, "data"))
+        data = json.load(open(path))
+        self.assertEqual(data["problems"][0]["id"], "toy_goldbach"); self.assertTrue(data["journal"]["ok"]); self.assertGreater(data["generated_at"], 0)
+        for f in ("index.html", "style.css", "app.js", os.path.join("data", "state.json")):
+            self.assertTrue(os.path.isfile(os.path.join(ROOT, "web", f)), f)
+        self.assertIn("data/state.json", open(os.path.join(ROOT, "web", "app.js")).read())
+
+
 if __name__ == "__main__":
     unittest.main()

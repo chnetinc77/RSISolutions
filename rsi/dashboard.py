@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .memory import Memory
@@ -32,6 +34,21 @@ def snapshot(mem: Memory, problems: dict) -> dict:
             "claims": claims,
             "lessons": mem.rows("SELECT problem_id,tag,text,created FROM lessons ORDER BY id DESC LIMIT 30"),
             "journal": mem.verify_journal()}
+
+
+def publish(mem: Memory, problems: dict, outdir: str) -> str:
+    """Write the public, static dashboard data (consumed by web/app.js on Vercel)."""
+    from . import __version__
+    snap = snapshot(mem, problems)
+    snap["generated_at"] = time.time()
+    snap["rsi_version"] = __version__
+    os.makedirs(outdir, exist_ok=True)
+    path = os.path.join(outdir, "state.json")
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(snap, f, default=str, separators=(",", ":"))
+    os.replace(tmp, path)
+    return path
 
 
 PAGE = """<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">

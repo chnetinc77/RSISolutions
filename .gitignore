@@ -3,3 +3,4 @@ __pycache__/
 memory/rsi.sqlite*
 *.log
 nohup.out
+update_dashboard.sh
