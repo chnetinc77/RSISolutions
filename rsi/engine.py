@@ -151,6 +151,8 @@ class Engine:
         out = {"experiment": eid, "arm": arm.name, "why": why, "status": "ok", "committed": committed,
                "duration": dur, "verify_seconds": vdur, "claims": [s for _, s, _ in statuses], "summary": result.summary}
         ctx.set(f"last_idx:{arm.name}", n_exp + 1)
+        out["sleep"] = result.extra.get("sleep", 0)
+        result.extra["claim_statuses"] = [s for _, s, _ in statuses]
         if committed:
             prob.commit(ctx, params, result)
             self.ev(pid, "Conductor", "commit", "verified progress committed to permanent memory")
@@ -240,6 +242,8 @@ class Engine:
     def replay(self, eid: int) -> dict:
         rec = self.mem.get_experiment(eid)
         prob = self.problems[rec["problem_id"]]
+        if not getattr(prob, "replayable", True):
+            return {"experiment": eid, "reproduced": None, "note": "uses an external language model; results are recorded and re-verified, not regenerated"}
         res = prob.run(json.loads(rec["params"]), rec["seed"])
         d = sha256(canon(res.deterministic))
         return {"experiment": eid, "original_digest": rec["digest"], "replay_digest": d, "reproduced": d == rec["digest"],

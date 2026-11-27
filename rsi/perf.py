@@ -11,7 +11,7 @@ def performance(mem, pid, baseline_arm: str | None = None, window=3) -> dict:
         per_arm.setdefault(r["name"][5:], []).append(r["value"])
     recent = {a: statistics.median(v[-window:]) for a, v in per_arm.items()}
     out = {"recent_rate": recent, "runs": {a: len(v) for a, v in per_arm.items()}}
-    if baseline_arm and baseline_arm in recent and recent:
+    if baseline_arm and recent.get(baseline_arm, 0) > 0:
         best = max(recent, key=recent.get)
         out["best_arm"] = best
         out["speedup_vs_baseline"] = recent[best] / recent[baseline_arm]

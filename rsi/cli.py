@@ -17,6 +17,13 @@ def main(argv=None):
     from .perf import performance
     from .problem import load_problems
 
+    env_file = os.environ.get("RSI_ENV_FILE", "/root/rsi.env")
+    if os.path.isfile(env_file):                      # secrets live only here (chmod 600), never in the repo
+        for line in open(env_file):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
     ap = argparse.ArgumentParser(prog="rsi")
     ap.add_argument("--db", default=os.path.join(ROOT, "memory", "rsi.sqlite"))
     ap.add_argument("--problems", default=os.path.join(ROOT, "problems"))
@@ -29,6 +36,9 @@ def main(argv=None):
     sub.add_parser("status"); sub.add_parser("claims"); sub.add_parser("verify-journal")
     rp = sub.add_parser("replay"); rp.add_argument("experiment", type=int)
     sub.add_parser("export")
+    li = sub.add_parser("lean-index", help="index open formalised Erdős problems from a formal-conjectures clone")
+    li.add_argument("--repo", default=os.environ.get("RSI_LEAN_PROJECT", "/home/rsi/formal-conjectures"))
+    sub.add_parser("llm-test", help="check the free LLM API key(s) work (prints no secrets)")
     pb = sub.add_parser("publish", help="write web/data/state.json for the static Vercel dashboard")
     pb.add_argument("--out", default=os.path.join(ROOT, "web", "data")); pb.add_argument("--push", action="store_true"); pb.add_argument("--live", action="store_true", help="push to the live-data branch instead")
     a = ap.parse_args(argv)
@@ -72,6 +82,8 @@ def main(argv=None):
             n += 1
             print(json.dumps({k: (round(v, 3) if isinstance(v, float) else v) for k, v in out.items()}))
             live()
+            if out.get("sleep"):
+                time.sleep(min(int(out["sleep"]), 3600))
             if not a.forever and n >= a.steps:
                 break
             if a.forever and out.get("status") == "failed":
@@ -111,6 +123,24 @@ def main(argv=None):
                 subprocess.run(["git", "push"], cwd=ROOT, check=True)
             else:
                 print("no changes to push")
+    elif a.cmd == "lean-index":
+        from .lean import index_repo
+        n = index_repo(a.repo, os.path.join(ROOT, "lean_challenges", "index.json"))
+        print(f"indexed {n} open challenges")
+    elif a.cmd == "llm-test":
+        from .llm import build_llm_from_env
+        llm = build_llm_from_env()
+        if not llm.available:
+            print("no key found: put GEMINI_API_KEY=... in /root/rsi.env (chmod 600)")
+            sys.exit(1)
+        for cl in llm.clients:
+            print("provider:", cl.name, "models:", getattr(cl, "models", getattr(cl, "model", "")))
+            if hasattr(cl, "list_models"):
+                try:
+                    print("  available flash models:", [m for m in cl.list_models() if "flash" in m][:8])
+                except Exception as e:  # noqa: BLE001
+                    print("  could not list models:", type(e).__name__)
+        print("reply:", llm.complete("Reply with the single word OK.", temperature=0.0, max_tokens=16).strip()[:40])
     elif a.cmd == "export":
         print("\n".join(mem.export_jsonl(os.path.join(ROOT, "memory", "export"))))
 

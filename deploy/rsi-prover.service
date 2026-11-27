@@ -1,0 +1,17 @@
+[Unit]
+Description=RSI AI prover (Erdős formal problems, free-tier LLM + Lean)
+After=network.target
+
+[Service]
+Environment=HOME=/root
+EnvironmentFile=-/root/rsi.env
+WorkingDirectory=/root/rsisolutions
+ExecStart=/usr/bin/python3 -m rsi run erdos_formal --forever --target-seconds 120 --mem-limit-mb 0 --live
+Restart=on-failure
+RestartSec=60
+Nice=10
+MemoryMax=4G
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

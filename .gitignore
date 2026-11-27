@@ -7,3 +7,6 @@ update_dashboard.sh
 update_erdos.sh
 .live-data/
 update_*.sh
+.live-data.lock
+lean_challenges/index.json
+memory/llm_usage.json

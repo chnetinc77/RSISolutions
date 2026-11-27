@@ -68,6 +68,9 @@ def publish(mem: Memory, problems: dict, outdir: str) -> str:
 def publish_live(mem: Memory, problems: dict, root: str) -> str:
     """Push the current snapshot to a one-commit `live-data` branch (no Vercel redeploy needed;
     the static site polls it).  Returns 'pushed' or 'unchanged'."""
+    import fcntl
+    lock = open(os.path.join(root, ".live-data.lock"), "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
     snap = snapshot(mem, problems)
     live = os.path.join(root, ".live-data")
 

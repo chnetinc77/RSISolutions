@@ -4,6 +4,7 @@ After=network.target
 
 [Service]
 Environment=HOME=/root
+Environment=PYTHONUNBUFFERED=1
 WorkingDirectory=/root/rsisolutions
 ExecStart=/usr/bin/python3 -m rsi run erdos_min_overlap --forever --target-seconds 30 --mem-limit-mb 5000 --live
 Restart=on-failure

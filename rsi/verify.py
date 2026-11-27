@@ -44,9 +44,16 @@ def overclaim_audit(spec: ClaimSpec) -> Report:
 
 def verify_claim(problem, spec: ClaimSpec) -> tuple[str, list[Report]]:
     if spec.kind == "proof":
-        rep = check_formal_proof(spec.evidence.get("lean_file", ""))
-        status = "formally_checked_pending_human_review" if rep.verdict == "pass" else "unverified_needs_external_review"
-        return status, [rep]
+        try:
+            reports = problem.verify(spec)
+        except Exception as e:  # noqa: BLE001
+            return "unverified_needs_external_review", [Report("verifier_crash", "error", {"error": repr(e)})]
+        if not reports:
+            reports = [check_formal_proof(spec.evidence.get("lean_file", ""))]
+        if any(r.verdict == "fail" for r in reports):
+            return "rejected", reports
+        ok = all(r.verdict == "pass" for r in reports)
+        return ("formally_checked_pending_human_review" if ok else "unverified_needs_external_review"), reports
     audit = overclaim_audit(spec)
     if audit.verdict == "fail":
         return "rejected", [audit]
