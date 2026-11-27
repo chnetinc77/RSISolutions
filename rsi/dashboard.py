@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -18,18 +20,30 @@ def snapshot(mem: Memory, problems: dict) -> dict:
         p = problems.get(pid)
         base = p.arms()[0].name if p else None
         claims = mem.rows("SELECT status, COUNT(*) c FROM claims WHERE problem_id=? GROUP BY status", (pid,))
-        probs.append({**r, "status": p.status(Ctx(mem, pid)) if p else {},
+        probs.append({**r, "prize": (p.prize if p else {}),
+                      "status": p.status(Ctx(mem, pid)) if p else {},
                       "experiments": mem.count_experiments(pid),
                       "claims": {c["status"]: c["c"] for c in claims},
                       "arm_stats": mem.arm_stats(pid),
                       "scale": mem.get_state(pid, "scale", 1.0),
                       "performance": performance(mem, pid, base),
+                      "best_series": mem.rows("SELECT ts, value FROM metrics WHERE problem_id=? AND name='best_C' ORDER BY id DESC LIMIT 300", (pid,))[::-1],
                       "series": mem.rows("SELECT ts, name, value FROM metrics WHERE problem_id=? AND name LIKE 'rate:%' ORDER BY id DESC LIMIT 200", (pid,))[::-1]})
     claims = mem.rows("SELECT * FROM claims ORDER BY id DESC LIMIT 25")
     for c in claims:
         c["verifications"] = mem.rows("SELECT verifier, verdict FROM verifications WHERE claim_id=?", (c["id"],))
         c["evidence"] = c["evidence"][:200]
-    return {"problems": probs,
+    roles = {"Conductor": "Allocates compute between strategies and sizes the workload",
+             "RSI": "Proposes and tests improvements to the system's own search",
+             "Auditor": "Independently verifies claims and gates every self-modification"}
+    agents = []
+    for r in mem.rows("SELECT agent, COUNT(*) n, MAX(ts) last_ts FROM events GROUP BY agent ORDER BY MIN(id)"):
+        last = mem.rows("SELECT kind, message FROM events WHERE agent=? ORDER BY id DESC LIMIT 1", (r["agent"],))[0]
+        agents.append({"name": r["agent"], "role": roles.get(r["agent"], "Runs the " + r["agent"].split(":")[-1] + " research strategy"),
+                       "events": r["n"], "last_ts": r["last_ts"], "last_kind": last["kind"], "last_message": last["message"]})
+    return {"agents": agents,
+            "events": mem.rows("SELECT id,ts,problem_id,agent,kind,message FROM events ORDER BY id DESC LIMIT 80"),
+            "problems": probs,
             "experiments": mem.rows("SELECT id,problem_id,arm,status,summary,duration,started FROM experiments ORDER BY id DESC LIMIT 25"),
             "claims": claims,
             "lessons": mem.rows("SELECT problem_id,tag,text,created FROM lessons ORDER BY id DESC LIMIT 30"),
@@ -49,6 +63,48 @@ def publish(mem: Memory, problems: dict, outdir: str) -> str:
         json.dump(snap, f, default=str, separators=(",", ":"))
     os.replace(tmp, path)
     return path
+
+
+def publish_live(mem: Memory, problems: dict, root: str) -> str:
+    """Push the current snapshot to a one-commit `live-data` branch (no Vercel redeploy needed;
+    the static site polls it).  Returns 'pushed' or 'unchanged'."""
+    snap = snapshot(mem, problems)
+    live = os.path.join(root, ".live-data")
+
+    def git(*a, check=True, cwd=live):
+        return subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, check=check)
+
+    if not os.path.isdir(os.path.join(live, ".git")):
+        url = git("remote", "get-url", "origin", cwd=root).stdout.strip()
+        r = subprocess.run(["git", "clone", "-q", "--branch", "live-data", "--single-branch", url, live], capture_output=True, text=True)
+        if r.returncode != 0:
+            shutil.rmtree(live, ignore_errors=True)
+            os.makedirs(live)
+            git("init", "-q")
+            git("checkout", "-q", "--orphan", "live-data")
+            git("remote", "add", "origin", url)
+        for key in ("user.name", "user.email"):
+            val = git("config", key, check=False, cwd=root).stdout.strip()
+            if val:
+                git("config", key, val)
+    path = os.path.join(live, "state.json")
+    if os.path.isfile(path):
+        try:
+            old = json.load(open(path))
+            old.pop("generated_at", None)
+            if old == json.loads(json.dumps(snap, default=str)):
+                return "unchanged"
+        except Exception:  # noqa: BLE001
+            pass
+    snap["generated_at"] = time.time()
+    with open(path + ".tmp", "w") as f:
+        json.dump(snap, f, default=str, separators=(",", ":"))
+    os.replace(path + ".tmp", path)
+    git("add", "state.json")
+    has_head = git("rev-parse", "--verify", "HEAD", check=False).returncode == 0
+    git("commit", "-q", *(["--amend"] if has_head else []), "-m", "live data")
+    git("push", "-q", "--force", "-u", "origin", "live-data")
+    return "pushed"
 
 
 PAGE = """<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">

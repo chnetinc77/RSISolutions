@@ -109,6 +109,57 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(status, "rejected"); self.assertIn("sieve_vs_trial_division", [r.verifier for r in reps if r.verdict == "fail"])
 
 
+class AgentTests(unittest.TestCase):
+    def test_event_feed_and_agent_roster(self):
+        probs = {p.id: p for p in toy.get_problems()}
+        mem, eng = engine(probs); eng.run("toy_goldbach", 2)
+        agents = {a["name"] for a in snapshot(mem, probs)["agents"]}
+        self.assertTrue({"Conductor", "Auditor"} <= agents)
+        self.assertTrue(any(a.startswith("Solver:") for a in agents))
+        kinds = {e["kind"] for e in snapshot(mem, probs)["events"]}
+        self.assertTrue({"dispatch", "start", "result", "verdict", "commit"} <= kinds)
+        self.assertTrue(mem.verify_journal()["ok"])
+
+    def test_auditor_blocks_unsafe_self_modification(self):
+        from rsi.problem import Ctx
+        probs = {p.id: p for p in toy.get_problems()}
+        mem, eng = engine(probs); prob = probs["toy_canary"]; ctx = Ctx(mem, "toy_canary")
+        arms = prob.arms(); fast = arms[1]
+        ctx.set("incumbent_rate:fast", 1.0)
+        eng._tune(prob, ctx, "toy_canary", arms, fast, {"chunk": 100}, {"chunk": 800}, 1e9)   # fast but wrong
+        self.assertIsNone(ctx.get("tuned:fast"))
+        alerts = mem.rows("SELECT * FROM events WHERE kind='alert' AND agent='Auditor'")
+        self.assertTrue(alerts and "FAILED" in alerts[0]["message"])
+        eng._tune(prob, ctx, "toy_canary", arms, fast, {"chunk": 100}, {"chunk": 200}, 1e9)   # fast and correct
+        self.assertEqual(ctx.get("tuned:fast"), {"chunk": 200})
+        self.assertTrue(mem.rows("SELECT * FROM events WHERE kind='adopted' AND agent='RSI'"))
+
+    def test_overclaiming_is_rejected(self):
+        mem, eng = engine({p.id: p for p in toy.get_problems()})
+        o = eng.step("toy_overclaim")
+        self.assertEqual(o["claims"], ["rejected"]); self.assertFalse(o["committed"])
+
+
+class LivePublishTests(unittest.TestCase):
+    def test_live_branch_is_a_single_rewritten_commit(self):
+        import subprocess
+        from rsi.dashboard import publish_live
+        d = tempfile.mkdtemp(); env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+        run = lambda *a, cwd=d: subprocess.run(a, cwd=cwd, check=True, capture_output=True, text=True, env=env)
+        run("git", "init", "-q", "--bare", "origin.git"); run("git", "clone", "-q", "origin.git", "work")
+        work = os.path.join(d, "work"); run("git", "config", "user.name", "t", cwd=work); run("git", "config", "user.email", "t@t", cwd=work)
+        probs = {p.id: p for p in toy.get_problems()}; mem = Memory(os.path.join(d, "m.sqlite")); eng = Engine(mem, probs, target_seconds=1)
+        eng.run("toy_goldbach", 1)
+        self.assertEqual(publish_live(mem, probs, work), "pushed")
+        self.assertEqual(publish_live(mem, probs, work), "unchanged")
+        eng.run("toy_goldbach", 1)
+        self.assertEqual(publish_live(mem, probs, work), "pushed")
+        origin = os.path.join(d, "origin.git")
+        self.assertEqual(run("git", "--git-dir", origin, "rev-list", "--count", "live-data").stdout.strip(), "1")
+        state = json.loads(run("git", "--git-dir", origin, "show", "live-data:state.json").stdout)
+        self.assertEqual(state["problems"][0]["id"], "toy_goldbach"); self.assertTrue(state["events"]); self.assertTrue(state["agents"])
+
+
 class DashboardTests(unittest.TestCase):
     def test_api(self):
         d = tempfile.mkdtemp(); db = os.path.join(d, "m.sqlite"); mem = Memory(db)
@@ -120,6 +171,49 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(data["problems"][0]["id"], "toy_goldbach"); self.assertTrue(data["journal"]["ok"])
         self.assertIn("RSI Research Dashboard", urllib.request.urlopen(f"http://127.0.0.1:{port}/").read().decode())
         srv.shutdown()
+
+
+class ErdosMinOverlapTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.eo = sys.modules[type(load_problems(os.path.join(ROOT, "problems"))["erdos_min_overlap"]).__module__]
+        cls.eo.PARTITION_M = 5000
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("eo_indep", os.path.join(ROOT, "verifiers", "erdos_min_overlap_independent.py"))
+        cls.indep = importlib.util.module_from_spec(spec); spec.loader.exec_module(cls.indep)
+
+    def test_constant_half_gives_one_half_and_two_algorithms_agree(self):
+        eo = self.eo; a = [eo.D // 2] * 24; S = eo.exact_S(a)
+        self.assertEqual(eo.C_of(S, 24), eo.Fraction(1, 2))
+        self.assertEqual(self.indep.correlation_max(a, eo.D), S)
+
+    def test_projection_and_rounding_keep_constraints_exactly(self):
+        eo = self.eo; import random as r
+        rng = r.Random(3); h = eo.project([rng.uniform(-1, 2) for _ in range(30)], 30)
+        self.assertAlmostEqual(sum(h), 15, places=9); self.assertTrue(all(0 <= x <= 1 for x in h))
+        a = eo.to_ints(h); self.assertEqual(sum(a), eo.D * 15)
+
+    def test_end_to_end_witnesses_verified_and_tampering_rejected(self):
+        from rsi.problem import ClaimSpec
+        from rsi.verify import verify_claim
+        prob = load_problems(os.path.join(ROOT, "problems"))["erdos_min_overlap"]
+        mem, eng = engine({prob.id: prob}); mem.set_state(prob.id, "scale", 0.05)
+        outs = eng.run(prob.id, 3)
+        self.assertTrue(all(o["committed"] for o in outs), outs)
+        best = mem.get_state(prob.id, "best"); self.assertLess(best["C"], 0.5); self.assertGreater(best["C"], 0.379005)
+        self.assertTrue(all(c["status"] == "verified" for c in mem.rows("SELECT status FROM claims")))
+        ev = {"n": best["n"], "D": self.eo.D, "a": list(best["a"]), "claimed_S": best["S"], "C": best["C"]}
+        bad = dict(ev, a=[ev["a"][0] + 5] + ev["a"][1:])          # breaks the integral-equals-1 constraint
+        self.assertEqual(verify_claim(prob, ClaimSpec("witness", "tampered", bad))[0], "rejected")
+        lie = dict(ev, claimed_S=ev["claimed_S"] - 1000)           # claims a better value than the truth
+        self.assertEqual(verify_claim(prob, ClaimSpec("witness", "lie", lie))[0], "rejected")
+
+    def test_canary_rejects_invalid_witness(self):
+        from rsi.problem import ExperimentResult
+        prob = load_problems(os.path.join(ROOT, "problems"))["erdos_min_overlap"]; eo = self.eo
+        good = ExperimentResult("", {}, {"n": 4, "a": [eo.D // 2] * 4, "S": eo.exact_S([eo.D // 2] * 4), "improved": True})
+        broken = ExperimentResult("", {}, {"n": 4, "a": [eo.D] * 4, "S": 0, "improved": True})
+        self.assertTrue(prob.canary_ok(good, good)); self.assertFalse(prob.canary_ok(good, broken))
 
 
 class PublishTests(unittest.TestCase):

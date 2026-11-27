@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS arm_stats(problem_id TEXT, arm TEXT, pulls INTEGER, t
 CREATE TABLE IF NOT EXISTS metrics(id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, problem_id TEXT,
   name TEXT, value REAL);
 CREATE TABLE IF NOT EXISTS state(problem_id TEXT, key TEXT, value TEXT, PRIMARY KEY(problem_id, key));
+CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, problem_id TEXT,
+  agent TEXT, kind TEXT, message TEXT, data TEXT);
 CREATE TABLE IF NOT EXISTS journal(seq INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, kind TEXT,
   payload TEXT, prev TEXT, hash TEXT);
 """
@@ -180,6 +182,14 @@ class Memory:
         with self.lock:
             return {r["arm"]: dict(r) for r in self.db.execute("SELECT * FROM arm_stats WHERE problem_id=?", (pid,))}
 
+    def add_event(self, pid, agent, kind, message, data=None):
+        """Live activity feed entry (also hash-chained in the journal)."""
+        with self.lock:
+            self.db.execute("INSERT INTO events(ts,problem_id,agent,kind,message,data) VALUES(?,?,?,?,?,?)",
+                            (time.time(), pid, agent, kind, message, canon(data or {})))
+            self._journal("event", {"problem": pid, "agent": agent, "kind": kind, "message": message})
+            self.db.commit()
+
     # ---- queries -------------------------------------------------------
     def rows(self, sql, args=()):
         with self.lock:
@@ -189,7 +199,7 @@ class Memory:
         """Write human-diffable JSONL dumps (suitable for committing to git)."""
         os.makedirs(outdir, exist_ok=True)
         files = []
-        for table in ["problems", "experiments", "claims", "verifications", "lessons", "arm_stats", "metrics", "state", "journal"]:
+        for table in ["problems", "experiments", "claims", "verifications", "lessons", "arm_stats", "metrics", "state", "events", "journal"]:
             p = os.path.join(outdir, f"{table}.jsonl")
             with open(p, "w") as f:
                 for r in self.rows(f"SELECT * FROM {table}"):

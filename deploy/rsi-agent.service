@@ -1,10 +1,11 @@
 [Unit]
-Description=RSI research agent (Hou-Zeng)
+Description=RSI research agents (Erdős minimum overlap)
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/RSISolutions
-ExecStart=/usr/bin/python3 -m rsi run hou_zeng_ppl013 --forever --target-seconds 30 --mem-limit-mb 5000
+Environment=HOME=/root
+WorkingDirectory=/root/rsisolutions
+ExecStart=/usr/bin/python3 -m rsi run erdos_min_overlap --forever --target-seconds 30 --mem-limit-mb 5000 --live
 Restart=on-failure
 Nice=10
 

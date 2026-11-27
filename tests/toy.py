@@ -56,5 +56,26 @@ class ProofClaimer(ToyGoldbach):
         return ExperimentResult("claims a proof", {"progress": 1}, {"x": 1}, [ClaimSpec("proof", "Goldbach is true", {"text": "trust me"})])
 
 
+class ToyCanary(ToyGoldbach):
+    """The 'fast' arm silently gives wrong answers for chunk > 400 (a self-modification bug)."""
+    id, title = "toy_canary", "Toy with a buggy optimisation"
+
+    def run(self, params, seed):
+        res = super().run(params, seed)
+        if params.get("chunk", 100) > 400:
+            res.deterministic["bad"] = [-1]
+        return res
+
+    def canary(self, arm, tuned):
+        return {**tuned, "lo": 4, "hi": 60, "arm": arm.name}
+
+
+class Overclaimer(ToyGoldbach):
+    id, title = "toy_overclaim", "Overclaiming solver"
+
+    def run(self, params, seed):
+        return ExperimentResult("x", {"progress": 1}, {"x": 1}, [ClaimSpec("evidence", "We have proved Goldbach up to 1000", {"lo": 4, "hi": 6})])
+
+
 def get_problems():
-    return [ToyGoldbach(), LyingSolver(), ProofClaimer()]
+    return [ToyGoldbach(), LyingSolver(), ProofClaimer(), ToyCanary(), Overclaimer()]

@@ -65,6 +65,17 @@ class Problem:
     domain = ""
     statement = ""
     source = ""
+    prize: dict = {}   # {"reward": str, "terms_verified": bool, "status": str}
+
+    def canary(self, arm: Arm, tuned: dict) -> dict | None:
+        """Small fixed workload used by the Auditor to check that a self-proposed
+        parameter change gives exactly the same answer as the reference strategy."""
+        return None
+
+    def canary_ok(self, proposed: ExperimentResult, reference: ExperimentResult) -> bool:
+        """Default: identical deterministic output. Optimisation problems override this
+        with a validity check (stochastic strategies legitimately give different answers)."""
+        return proposed.deterministic == reference.deterministic
 
     def arms(self) -> list[Arm]:
         raise NotImplementedError

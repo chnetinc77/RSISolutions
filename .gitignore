@@ -4,3 +4,6 @@ memory/rsi.sqlite*
 *.log
 nohup.out
 update_dashboard.sh
+update_erdos.sh
+.live-data/
+update_*.sh

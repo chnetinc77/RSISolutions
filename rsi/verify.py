@@ -32,11 +32,24 @@ def check_formal_proof(path: str) -> Report:
     return Report("lean_checker", "pass" if r.returncode == 0 else "fail", {"stderr": r.stderr[-500:]})
 
 
+_OVERCLAIM = re.compile(r"\b(proved|proves|proven|qed|theorem)\b", re.I)
+
+
+def overclaim_audit(spec: ClaimSpec) -> Report:
+    """Policy check: only a verified proof claim may use proof language."""
+    if spec.kind != "proof" and _OVERCLAIM.search(spec.statement):
+        return Report("overclaim_audit", "fail", {"reason": "proof language in a non-proof claim"}, independent=False)
+    return Report("overclaim_audit", "pass", {}, independent=False)
+
+
 def verify_claim(problem, spec: ClaimSpec) -> tuple[str, list[Report]]:
     if spec.kind == "proof":
         rep = check_formal_proof(spec.evidence.get("lean_file", ""))
         status = "formally_checked_pending_human_review" if rep.verdict == "pass" else "unverified_needs_external_review"
         return status, [rep]
+    audit = overclaim_audit(spec)
+    if audit.verdict == "fail":
+        return "rejected", [audit]
     try:
         reports = problem.verify(spec)
     except Exception as e:  # noqa: BLE001

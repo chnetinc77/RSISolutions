@@ -24,13 +24,13 @@ def main(argv=None):
     sub.add_parser("problems")
     r = sub.add_parser("run"); r.add_argument("problem"); r.add_argument("--steps", type=int, default=1)
     r.add_argument("--target-seconds", type=float, default=20.0); r.add_argument("--arm"); r.add_argument("--seed", type=int, default=0)
-    r.add_argument("--forever", action="store_true"); r.add_argument("--mem-limit-mb", type=int, default=5000)
+    r.add_argument("--forever", action="store_true"); r.add_argument("--live", action="store_true", help="push live dashboard data"); r.add_argument("--live-interval", type=int, default=60); r.add_argument("--mem-limit-mb", type=int, default=5000)
     d = sub.add_parser("dashboard"); d.add_argument("--host", default="127.0.0.1"); d.add_argument("--port", type=int, default=8787)
     sub.add_parser("status"); sub.add_parser("claims"); sub.add_parser("verify-journal")
     rp = sub.add_parser("replay"); rp.add_argument("experiment", type=int)
     sub.add_parser("export")
     pb = sub.add_parser("publish", help="write web/data/state.json for the static Vercel dashboard")
-    pb.add_argument("--out", default=os.path.join(ROOT, "web", "data")); pb.add_argument("--push", action="store_true")
+    pb.add_argument("--out", default=os.path.join(ROOT, "web", "data")); pb.add_argument("--push", action="store_true"); pb.add_argument("--live", action="store_true", help="push to the live-data branch instead")
     a = ap.parse_args(argv)
 
     problems = load_problems(a.problems)
@@ -48,16 +48,30 @@ def main(argv=None):
                 pass
         eng = Engine(mem, problems, seed=a.seed, target_seconds=a.target_seconds, repo_root=ROOT)
         n = 0
+        last_live = 0.0
+
+        def live(force=False):
+            nonlocal last_live
+            if a.live and (force or time.time() - last_live >= a.live_interval):
+                try:
+                    from .dashboard import publish_live
+                    print("live:", publish_live(mem, problems, ROOT))
+                except Exception as e:  # noqa: BLE001
+                    print("live publish failed:", e)
+                last_live = time.time()
+        live(True)
         while True:
             try:
                 out = eng.step(a.problem, a.arm)
             except RuntimeError as e:
                 if "MAX_N" in str(e):
                     print("frontier cap reached; stopping cleanly")
+                    live(True)
                     break
                 raise
             n += 1
             print(json.dumps({k: (round(v, 3) if isinstance(v, float) else v) for k, v in out.items()}))
+            live()
             if not a.forever and n >= a.steps:
                 break
             if a.forever and out.get("status") == "failed":
@@ -83,7 +97,10 @@ def main(argv=None):
     elif a.cmd == "replay":
         res = Engine(mem, problems).replay(a.experiment); print(json.dumps(res, indent=2)); sys.exit(0 if res["reproduced"] else 1)
     elif a.cmd == "publish":
-        from .dashboard import publish
+        from .dashboard import publish, publish_live
+        if a.live:
+            print("live:", publish_live(mem, problems, ROOT))
+            return
         path = publish(mem, problems, a.out)
         print("wrote", path)
         if a.push:

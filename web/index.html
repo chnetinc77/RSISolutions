@@ -3,70 +3,74 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RSI Research Dashboard | FL Superintelligence Labs</title>
-<meta name="description" content="Live, independently verified research progress from the FL Superintelligence Labs recursive self-improvement research system.">
+<title>RSI Mission Control | FL Superintelligence Labs</title>
+<meta name="description" content="Live view of the FL Superintelligence Labs multi-agent research system: solver agents, a recursive self-improvement agent and an independent auditor.">
 <meta name="theme-color" content="#04070a">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="nav">
   <a class="brand" href="#home">SUPERINTELLIGENCE LABS</a>
-  <nav class="links"><a href="#problems">Research</a><a href="#performance">Performance</a><a href="#claims">Claims</a><a href="#experiments">Experiments</a><a href="#lessons">Lessons</a></nav>
+  <nav class="links"><a href="#network">Agents</a><a href="#missions">Missions</a><a href="#performance">Performance</a><a href="#claims">Verification</a><a href="#lessons">Lessons</a></nav>
   <a class="cta" href="https://flsilabs.space">flsilabs.space →</a>
 </header>
-
 <main id="home">
   <section class="hero">
-    <div class="glow" aria-hidden="true"></div>
-    <p class="eyebrow">INDEPENDENT RESEARCH · LIVE DASHBOARD</p>
-    <h1>Evidence<br>over <em>claims.</em></h1>
-    <p class="lead">Progress from the FL recursive self-improvement research system. Every claim is independently verified before it is recorded, and computational evidence is never presented as proof.</p>
+    <div class="glow" aria-hidden="true"></div><div class="grid-bg" aria-hidden="true"></div>
+    <p class="eyebrow"><span id="live-dot" class="dot"></span><span id="live-text">CONNECTING…</span> · RSI MISSION CONTROL</p>
+    <h1>Autonomous research.<br><em>Audited.</em></h1>
+    <p class="lead">A group of agents works on open mathematics and physics problems. Solver agents search, an RSI agent improves the system itself, and an independent Auditor verifies every claim and approves every change.</p>
     <div id="stats" class="stats"></div>
     <p id="updated" class="mono mut"></p>
   </section>
 
-  <section id="problems">
-    <p class="sec-label mono">01 / FL SUPERINTELLIGENCE LABS · ACTIVE RESEARCH</p>
-    <h2>Independent thinking. <span class="dim">Verified progress.</span></h2>
+  <section id="network">
+    <p class="sec-label mono">01 / AGENT NETWORK · LIVE</p>
+    <h2>Who is working right now.</h2>
+    <div class="split">
+      <div class="panel net"><div id="net"></div><div id="roster" class="roster"></div></div>
+      <div class="panel term"><div class="term-head mono"><span>LIVE ACTIVITY FEED</span><span id="feed-count" class="mut"></span></div><div id="feed" class="feed"></div></div>
+    </div>
+  </section>
+
+  <section id="missions">
+    <p class="sec-label mono">02 / MISSIONS &amp; PRIZE LEDGER</p>
+    <h2>Problems under investigation.</h2>
     <div id="problem-list" class="grid"></div>
   </section>
 
   <section id="performance">
-    <p class="sec-label mono">02 / SELF-IMPROVEMENT</p>
+    <p class="sec-label mono">03 / RECURSIVE SELF-IMPROVEMENT</p>
     <h2>The system improves how it searches.</h2>
-    <p class="sub">Throughput per experiment for each research strategy (log scale). Rising lines mean the agent found faster methods or better parameters.</p>
+    <p class="sub">Throughput per experiment for each strategy (log scale). Every self-modification must pass the Auditor's canary check before it is adopted.</p>
     <div id="chart" class="panel"></div>
+    <h3 class="subhead">Best verified bound over time</h3>
+    <div id="best-chart" class="panel"></div>
   </section>
 
   <section id="claims">
-    <p class="sec-label mono">03 / VERIFICATION</p>
+    <p class="sec-label mono">04 / INDEPENDENT VERIFICATION</p>
     <h2>Discover. Challenge. <span class="dim">Verify.</span></h2>
     <div id="claim-list" class="rows"></div>
   </section>
 
-  <section id="experiments">
-    <p class="sec-label mono">04 / EXPERIMENT LOG</p>
-    <h2>Every result is reproducible.</h2>
-    <div id="exp-list" class="rows"></div>
-  </section>
-
   <section id="lessons">
     <p class="sec-label mono">05 / LESSONS LEARNED</p>
-    <h2>What the agent has learned.</h2>
+    <h2>What the agents have learned.</h2>
     <div id="lesson-list" class="rows"></div>
   </section>
 
   <section class="transparency">
     <p class="sec-label mono">[ FL / OPEN RESEARCH ]</p>
     <h2>Evidence over claims.</h2>
-    <p class="sub">Computational evidence, independently reproduced findings and formal proofs are different levels of evidence. This dashboard labels each claim accordingly and reports limitations rather than presenting unverified results as established discoveries.</p>
+    <p class="sub">Computational evidence, independently reproduced findings and formal proofs are different levels of evidence. Nothing here is a claimed discovery or a won prize unless it says so and has passed independent human review.</p>
   </section>
 </main>
-
 <footer>
   <div><strong>FL.</strong> <span class="mono">SUPERINTELLIGENCE LABS</span></div>
   <p class="mono mut">© 2026 FL SUPERINTELLIGENCE LABS · INDEPENDENT RESEARCH ORGANISATION <a href="#home">BACK TO TOP ↑</a></p>
 </footer>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

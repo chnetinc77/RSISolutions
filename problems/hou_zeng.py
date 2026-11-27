@@ -147,6 +147,15 @@ class HouZeng(Problem):
     statement = "Every integer n > 4 can be written as n = p + F + C, p an odd prime, F a positive Fibonacci number, C a Catalan number."
     source = "Z.-W. Sun, arXiv:0901.3075, Conjecture 1.13; OEIS A154404. Prize: $1000 proof / $200 counterexample (verify original terms)."
 
+    prize = {"reward": "$1,000 for a proof / $200 for a verified counterexample (per Sun's list)",
+             "terms_verified": False,
+             "status": "Open. Checked to ~3e13 in the literature; a counterexample is extremely unlikely. Original prize terms not yet verified."}
+
+    def canary(self, arm, tuned):
+        if arm.kind != "search":
+            return None
+        return {**tuned, "lo": 5, "hi": 40000, "arm": arm.name}
+
     def arms(self):
         return [
             Arm("per_n_early_exit", description="per-n scan over ascending pair-sums, early exit"),

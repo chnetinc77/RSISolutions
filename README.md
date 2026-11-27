@@ -31,3 +31,12 @@ python3 -m rsi run hou_zeng_ppl013 --forever    # daemon; see deploy/*.service
 | Reproducibility | each experiment stores params, seed, code hash, git commit, Python/platform, result digest; `rsi replay` |
 
 See `docs/` for architecture, verification policy, adding problems, and Hou-Zeng details/limits.
+
+## Multi-agent system (v0.2)
+Conductor, one Solver per strategy, an RSI agent and an Auditor cooperate on every problem; each action appears in the live feed
+on the Vercel dashboard. The RSI agent may only adopt a self-modification if it is faster **and** the Auditor's canary check shows
+it gives exactly the same answers as the reference strategy. See `docs/AGENTS.md`.
+
+## Active research targets
+* `hou_zeng_ppl013`: Hou-Zeng conjecture, verified (as evidence only) to 4e8; finished.
+* `erdos_min_overlap`: Erdős minimum overlap problem (upper bound). Agents search for step functions; every witness is checked exactly by two independent verifiers. Published records: 0.3809268534 (Haugland 2016), 0.380924 (AlphaEvolve 2025), 0.380876 (TTT-Discover 2026).
