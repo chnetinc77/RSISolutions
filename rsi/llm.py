@@ -1,7 +1,7 @@
 """Free-tier LLM clients (stdlib only) with failover, spacing and hard daily request caps.
 
 Keys come from the environment only (never from the repository or logs):
-  GEMINI_API_KEY (+ optional GEMINI_MODELS="gemini-2.5-flash,gemini-2.5-flash-lite", GEMINI_DAILY_CAP, GEMINI_MIN_INTERVAL)
+  GEMINI_API_KEY (+ optional GEMINI_MODELS="gemini-3-flash-preview,gemini-flash-latest", GEMINI_DAILY_CAP, GEMINI_MIN_INTERVAL)
   GROQ_API_KEY, OPENROUTER_API_KEY, MISTRAL_API_KEY (OpenAI-compatible; optional *_MODEL, *_DAILY_CAP)
 Only PUBLIC problem statements and Lean code are ever sent.  The caps keep usage inside free tiers;
 if a provider starts charging, it is the account's billing setting, not this code, that decides - keep billing disabled.
@@ -60,7 +60,7 @@ class GeminiClient:
 
     def __init__(self, key, usage, models=None, base=None, cap=200, min_interval=6.0):
         self.key, self.usage, self.cap, self.min_interval = key, usage, cap, min_interval
-        self.models = models or ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
+        self.models = models or ["gemini-3-flash-preview", "gemini-flash-latest", "gemini-3.1-flash-lite-preview"]
         self.base = (base or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
         self._last = 0.0
 
@@ -80,8 +80,12 @@ class GeminiClient:
                 try:
                     out = _post(f"{self.base}/models/{model}:generateContent", body, {"x-goog-api-key": self.key})
                 except urllib.error.HTTPError as e:
-                    last_err = f"HTTP {e.code}"
-                    if e.code == 429:
+                    try:
+                        detail = json.loads(e.read().decode()).get("error", {}).get("message", "")[:160]
+                    except Exception:  # noqa: BLE001
+                        detail = ""
+                    last_err = f"HTTP {e.code} {detail}".strip()
+                    if e.code in (429, 500, 502, 503, 504):      # rate limit / temporary overload: back off and retry
                         time.sleep(min(60, 10 * (attempt + 1)))
                         continue
                     if e.code in (400, 404):
@@ -121,7 +125,7 @@ class OpenAICompatClient:
                 out = _post(f"{self.base}/chat/completions", {"model": self.model, "messages": msgs, "temperature": temperature, "max_tokens": max_tokens},
                             {"Authorization": f"Bearer {self.key}"})
             except urllib.error.HTTPError as e:
-                if e.code == 429:
+                if e.code in (429, 500, 502, 503, 504):
                     time.sleep(min(60, 10 * (attempt + 1)))
                     continue
                 raise LLMError(f"{self.name} HTTP {e.code}") from None
@@ -170,7 +174,7 @@ def build_llm_from_env(usage_path=None):
             continue
         cap = int(os.environ.get(f"{p.upper()}_DAILY_CAP", "200"))
         if p == "gemini":
-            models = [m.strip() for m in os.environ.get("GEMINI_MODELS", "gemini-2.5-flash,gemini-2.5-flash-lite").split(",") if m.strip()]
+            models = [m.strip() for m in os.environ.get("GEMINI_MODELS", "gemini-3-flash-preview,gemini-flash-latest,gemini-3.1-flash-lite-preview").split(",") if m.strip()]
             clients.append(GeminiClient(key, usage, models, os.environ.get("GEMINI_BASE_URL"), cap, float(os.environ.get("GEMINI_MIN_INTERVAL", "6"))))
         else:
             defaults = {"groq": ("https://api.groq.com/openai/v1", "openai/gpt-oss-120b"),

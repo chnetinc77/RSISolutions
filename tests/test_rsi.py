@@ -216,6 +216,17 @@ class ErdosMinOverlapTests(unittest.TestCase):
         self.assertTrue(prob.canary_ok(good, good)); self.assertFalse(prob.canary_ok(good, broken))
 
 
+class PerfTests(unittest.TestCase):
+    def test_zero_baseline_rate_does_not_crash(self):
+        from rsi.perf import performance
+        mem = Memory(":memory:")
+        for v in (0.0, 0.0, 0.0):
+            mem.record_metric("p", "rate:base", v)
+        mem.record_metric("p", "rate:other", 5.0)
+        out = performance(mem, "p", "base")
+        self.assertNotIn("speedup_vs_baseline", out); self.assertEqual(out["recent_rate"]["other"], 5.0)
+
+
 class PublishTests(unittest.TestCase):
     def test_publish_writes_static_state_and_site_files_exist(self):
         from rsi.dashboard import publish
