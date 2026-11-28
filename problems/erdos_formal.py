@@ -120,23 +120,25 @@ class FormalErdos(Problem):
         return {"proven": False, "progress": 0.0, "calls": calls}
 
     def _direct(self, params, text, ch, seed):
-        llm, feedback, calls = get_llm(), None, 0
+        llm, feedback, calls, rej = get_llm(), None, 0, []
         for rnd in range(int(params["repair_rounds"]) + 1):
             resp = llm.complete(_prompt(ch, feedback), SYSTEM, float(params["temperature"]))
             tactics, ans = lean.extract_tactics(resp), (lean.extract_answer(resp) if ch["has_answer"] else None)
             if ch["has_answer"] and ans is None:
                 feedback = "You must start your reply with `ANSWER: True` or `ANSWER: False`."
+                rej.append("no ANSWER line")
                 continue
             try:
                 full, r = self._try(text, ch, tactics, ans, f"d_{seed}_{rnd}")
             except ValueError as e:
                 feedback = f"Rejected before compiling: {e}"
+                rej.append(str(e)[:40])
                 continue
             calls += 1
             if r["ok"]:
-                return {"proven": True, "tactics": tactics, "answer": ans, "full": full, "axioms": r["axioms"], "progress": 1.0, "calls": calls}
+                return {"proven": True, "tactics": tactics, "answer": ans, "full": full, "axioms": r["axioms"], "progress": 1.0, "calls": calls, "rej": rej}
             feedback = "\n".join(r["errors"]) or r["tail"]
-        return {"proven": False, "progress": 0.0, "calls": calls}
+        return {"proven": False, "progress": 0.0, "calls": calls, "rej": rej}
 
     def _decompose(self, params, text, ch, seed):
         llm, calls = get_llm(), 0
@@ -209,7 +211,7 @@ class FormalErdos(Problem):
                                     {"challenge": ch["id"], "full_name": ch["full_name"], "tactics": out["tactics"], "answer": out["answer"],
                                      "lean_file": path, "axioms": out["axioms"]}))
         return ExperimentResult(
-            f"{arm} on {ch['id']}: " + ("PROOF CANDIDATE (kernel-checked)" if out["proven"] else f"no proof ({out['calls']} Lean runs, progress {out['progress']})"),
+            f"{arm} on {ch['id']}: " + ("PROOF CANDIDATE (kernel-checked)" if out["proven"] else f"no proof ({out['calls']} Lean runs, progress {out['progress']}" + (f"; {len(out['rej'])} replies rejected before Lean: {'; '.join(out['rej'][:2])}" if out.get("rej") else "") + ")"),
             {"progress": out["progress"], "lean_calls": out["calls"]},
             {"challenge": ch["id"], "proven": out["proven"], "counted": True, "progress": out["progress"]}, claims=claims)
 
