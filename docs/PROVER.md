@@ -17,7 +17,7 @@ Keys live only in `/root/rsi.env` (chmod 600). Hard daily request caps per provi
 keep billing disabled on the Google project. Only public problem text and Lean code are sent; free tiers may use prompts for training.
 
 ## Setup
-1. `sh scripts/setup_lean.sh` (as root; creates user `rsi`, installs Lean + Mathlib cache, builds the problem imports; 20-60 min, several GB).
+1. `sh scripts/setup_lean.sh` (as root; creates user `rsi`, installs Lean + Mathlib cache, builds the shared libraries FormalConjecturesForMathlib and FormalConjecturesUtil; 20-60 min, several GB).
 2. `python3 -m rsi lean-index` (lists open challenges), `python3 -m rsi llm-test` (checks the key).
 3. `systemctl enable --now rsi-prover`.
 

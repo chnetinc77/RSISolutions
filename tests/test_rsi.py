@@ -216,6 +216,13 @@ class ErdosMinOverlapTests(unittest.TestCase):
         self.assertEqual(o["claims"], ["verified"], o)
         self.assertLess(mem.get_state(prob.id, "best")["C"], 0.39)       # far below the trivial 0.5
 
+    @unittest.skipUnless(__import__("importlib").util.find_spec("scipy") is not None, "scipy not installed")
+    def test_parallel_restarts_give_identical_results_and_even_pieces(self):
+        eo = self.eo
+        a = eo.slp_search(None, "fresh", 4, 0.0, 0.05, 15, 21, seed=5, workers=1)
+        b = eo.slp_search(None, "fresh", 4, 0.0, 0.05, 15, 21, seed=5, workers=2)
+        self.assertEqual(a, b); self.assertEqual(len(a) % 2, 0)             # same answer on 1 or 2 workers; 21 -> 20 pieces
+
     def test_canary_rejects_invalid_witness(self):
         from rsi.problem import ExperimentResult
         prob = load_problems(os.path.join(ROOT, "problems"))["erdos_min_overlap"]; eo = self.eo
