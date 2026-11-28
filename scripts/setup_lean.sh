@@ -13,6 +13,6 @@ runuser -u rsi -- bash -c '
   cd formal-conjectures
   export PATH=$HOME/.elan/bin:$PATH
   lake exe cache get
-  lake build FormalConjectures.Util.ProblemImports
+  lake build FormalConjecturesForMathlib FormalConjecturesUtil
 '
 echo SETUP_DONE
