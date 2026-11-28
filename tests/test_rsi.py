@@ -208,6 +208,14 @@ class ErdosMinOverlapTests(unittest.TestCase):
         lie = dict(ev, claimed_S=ev["claimed_S"] - 1000)           # claims a better value than the truth
         self.assertEqual(verify_claim(prob, ClaimSpec("witness", "lie", lie))[0], "rejected")
 
+    @unittest.skipUnless(__import__("importlib").util.find_spec("scipy") is not None, "scipy not installed")
+    def test_sequential_lp_arm_finds_verified_witness(self):
+        prob = load_problems(os.path.join(ROOT, "problems"))["erdos_min_overlap"]
+        mem, eng = engine({prob.id: prob}); mem.set_state(prob.id, "scale", 0.15)
+        o = eng.step(prob.id, force_arm="slp_fresh")
+        self.assertEqual(o["claims"], ["verified"], o)
+        self.assertLess(mem.get_state(prob.id, "best")["C"], 0.39)       # far below the trivial 0.5
+
     def test_canary_rejects_invalid_witness(self):
         from rsi.problem import ExperimentResult
         prob = load_problems(os.path.join(ROOT, "problems"))["erdos_min_overlap"]; eo = self.eo

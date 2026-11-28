@@ -41,3 +41,5 @@ it gives exactly the same answers as the reference strategy. See `docs/AGENTS.md
 * `hou_zeng_ppl013`: Hou-Zeng conjecture, verified (as evidence only) to 4e8; finished.
 * `erdos_min_overlap`: Erdős minimum overlap problem (upper bound). Agents search for step functions; every witness is checked exactly by two independent verifiers. Published records: 0.3809268534 (Haugland 2016), 0.380924 (AlphaEvolve 2025), 0.380876 (TTT-Discover 2026).
 * `erdos_formal`: AI proof search on open formalised Erdős problems with free-tier LLMs; every proof is kernel-checked by Lean and stays a candidate until a human reviews it (`docs/PROVER.md`).
+
+Optional (strongly recommended for `erdos_min_overlap`): `apt install -y python3-numpy python3-scipy` enables the sequential-LP strategies.

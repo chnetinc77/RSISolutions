@@ -26,7 +26,7 @@ from rsi.problem import Arm, ClaimSpec, ExperimentResult, Problem, Report
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEP = os.path.join(ROOT, "verifiers", "erdos_min_overlap_independent.py")
 D = 10 ** 9
-START_N, MAX_N = 24, 192
+START_N, MAX_N = 24, 420
 PARTITION_M = 20000
 LOWER_BOUND = 0.379005
 REFS = {"trivial (h = 1/2)": 0.5, "Haugland 2016": 0.3809268534, "AlphaEvolve 2025": 0.380924, "TTT-Discover 2026": 0.380876}
@@ -165,6 +165,82 @@ def anneal(h, iters, step, temp, rng):
     return bh
 
 
+def slp_available():
+    try:
+        import numpy  # noqa: F401
+        import scipy.optimize  # noqa: F401
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _fg(h):
+    """Objective values f_s and their gradient rows for all shifts s (numpy)."""
+    import numpy as np
+    n = len(h)
+    G = np.zeros((2 * n - 1, n))
+    f = np.zeros(2 * n - 1)
+    one = 1.0 - h
+    for s in range(-(n - 1), n):
+        i = np.arange(max(0, -s), min(n, n - s))
+        k = i + s
+        f[s + n - 1] = (2.0 / n) * np.sum(h[i] * one[k])
+        G[s + n - 1, i] += (2.0 / n) * one[k]
+        G[s + n - 1, k] -= (2.0 / n) * h[i]
+    return f, G
+
+
+def slp(h, iters=150, delta=0.05):
+    """Sequential linear programming with a trust region (Haugland-style): minimise t subject to the
+    linearised constraints f_s(h) + grad f_s . dh <= t, 0 <= h <= 1, sum h = n/2, |dh| <= delta."""
+    import numpy as np
+    from scipy.optimize import linprog
+    n = len(h)
+    best, bf = h.copy(), _fg(h)[0].max()
+    for _ in range(iters):
+        f, G = _fg(h)
+        c = np.zeros(n + 1)
+        c[-1] = 1.0
+        lo, hi = np.maximum(-delta, -h), np.minimum(delta, 1.0 - h)
+        Aeq = np.zeros((1, n + 1))
+        Aeq[0, :n] = 1.0
+        r = linprog(c, A_ub=np.hstack([G, -np.ones((2 * n - 1, 1))]), b_ub=-f, A_eq=Aeq, b_eq=[0.0],
+                    bounds=[(lo[i], hi[i]) for i in range(n)] + [(None, None)], method="highs")
+        if r.status != 0:
+            delta *= 0.5
+            continue
+        hn = np.clip(h + r.x[:n], 0.0, 1.0)
+        hn = np.clip(hn + (n / 2 - hn.sum()) / n, 0.0, 1.0)
+        fn = _fg(hn)[0].max()
+        if fn < bf - 1e-12:
+            h, bf, best = hn, fn, hn.copy()
+            delta = min(delta * 1.3, 0.2)
+        else:
+            delta *= 0.5
+        if delta < 1e-9:
+            break
+    return best, bf
+
+
+def slp_search(start, mode, restarts, sigma, delta, slp_iters, n_fresh, seed):
+    """Restarts of SLP: 'fresh' = random starts at n_fresh pieces; 'hop' = noisy copies of the incumbent."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    best_h, best_v = None, float("inf")
+    for _ in range(restarts):
+        if mode == "fresh" or start is None:
+            n = n_fresh
+            h0 = np.clip(0.5 + 0.4 * (rng.random(n) - 0.5), 0.0, 1.0)
+        else:
+            base = np.array(start, dtype=float)
+            h0 = np.clip(base + sigma * rng.standard_normal(len(base)), 0.0, 1.0)
+        h0 = np.array(project(list(h0), len(h0)))
+        h, v = slp(h0, slp_iters, delta)
+        if v < best_v:
+            best_h, best_v = h, v
+    return [float(x) for x in best_h]
+
+
 def partition_overlap(a, m=None):
     """Sanity check on the ORIGINAL problem: build a random partition of {1..2m} with local density h,
     |A| = |B| = m, and return max_k M_k / m (should be about C, up to O(1/sqrt(m)) noise)."""
@@ -206,12 +282,21 @@ class MinOverlap(Problem):
                 description="simulated annealing with mass-preserving pair moves"),
             Arm("softmax_gradient", params={"beta0": 150.0, "beta1": 3000.0, "lr": 0.02, "base_iters": 1200}, tunable={"beta1": (500.0, 20000.0), "lr": (0.002, 0.2)},
                 description="projected gradient descent on a smoothed max"),
+            Arm("slp_fresh", params={"restarts": 6, "slp_iters": 150, "delta": 0.05, "n_fresh": 52, "mode": "fresh"},
+                tunable={"restarts": (2, 40), "n_fresh": (40, 64), "delta": (0.01, 0.1)},
+                description="sequential linear programming from random starts (Haugland-style)"),
+            Arm("slp_hop", params={"restarts": 4, "slp_iters": 150, "delta": 0.03, "sigma": 0.03, "mode": "hop"},
+                tunable={"restarts": (1, 30), "sigma": (0.005, 0.2), "delta": (0.01, 0.1)},
+                description="sequential LP from noisy copies of the best step function"),
+            Arm("slp_refine", params={"restarts": 2, "slp_iters": 120, "delta": 0.02, "sigma": 0.01, "mode": "hop", "upsample": True},
+                tunable={"restarts": (1, 10), "sigma": (0.002, 0.1)},
+                description="double the number of pieces of the best function, then sequential LP"),
             Arm("refine_resolution", params={"beta0": 150.0, "beta1": 3000.0, "lr": 0.02, "base_iters": 600, "upsample": True},
                 tunable={"beta1": (500.0, 20000.0), "lr": (0.002, 0.2)}, description="double the number of steps, then descend"),
         ]
 
     def canary(self, arm, tuned):
-        return {**arm.params, **tuned, "start": None, "base_iters": 20, "iters": 20, "arm": arm.name, "canary": True}
+        return {**arm.params, **tuned, "start": None, "base_iters": 20, "iters": 20, "restarts": 1, "arm": arm.name, "canary": True}
 
     def canary_ok(self, proposed, reference):
         for r in (proposed, reference):
@@ -224,7 +309,10 @@ class MinOverlap(Problem):
     def plan(self, ctx, arm, tuned, scale):
         best = ctx.get("best")
         iters = max(30, int(tuned.get("base_iters", arm.params.get("base_iters", 1000)) * scale))
-        return {**tuned, "iters": iters, "start": best["a"] if best else None}
+        p = {**tuned, "iters": iters, "start": best["a"] if best else None}
+        if arm.name.startswith("slp"):
+            p["restarts"] = max(1, int(round(tuned.get("restarts", 4) * scale)))
+        return p
 
     def run(self, params, seed):
         rng = random.Random(seed)
@@ -240,7 +328,16 @@ class MinOverlap(Problem):
         if params.get("upsample") and len(h) * 2 <= MAX_N:
             h = [x for x in h for _ in (0, 1)]
         iters = int(params["iters"])
-        if arm == "anneal_pairs":
+        if arm.startswith("slp"):
+            if not slp_available():
+                return ExperimentResult("sequential LP needs numpy+scipy (apt install python3-numpy python3-scipy)", {"progress": 0.0},
+                                        {"n": len(h), "a": to_ints(h), "S": exact_S(to_ints(h)), "improved": False}, extra={"sleep": 600})
+            canary = bool(params.get("canary"))
+            start = None if (not params.get("start") and not canary) else h
+            h = slp_search(start, params["mode"], int(params["restarts"]) if not canary else 1, float(params.get("sigma", 0.0)),
+                           float(params["delta"]), int(params["slp_iters"]) if not canary else 15,
+                           int(params.get("n_fresh", 52)) if not canary else 12, seed)
+        elif arm == "anneal_pairs":
             h = anneal(h, iters, params["step"], params["temp"], rng)
         else:
             h = softmax_descent(project(h, len(h)), iters, params["beta0"], params["beta1"], params["lr"])
